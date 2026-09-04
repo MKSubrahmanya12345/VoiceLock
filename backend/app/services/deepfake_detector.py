@@ -179,6 +179,10 @@ class LocalDeepfakeDetector:
             self._fake_index,
             self._id2label,
         )
+        print(
+            f"  Local deepfake score: {score:.3f} "
+            f"(fake_index={self._fake_index}, labels={self._id2label})"
+        )
         return score
 
     async def score_wav(self, wav_bytes: bytes, tail_seconds: int = 15) -> float:
@@ -224,6 +228,7 @@ class DeepfakeDetector:
                 return await self._detect_local(audio_bytes)
             except Exception as exc:
                 logger.error("Local deepfake detection failed: %s", exc)
+                print(f"  ✗ Local deepfake detection failed: {exc}")
                 return 0.0
 
         if provider == "aurigin":
@@ -231,6 +236,7 @@ class DeepfakeDetector:
                 return await self._detect_aurigin(audio_bytes)
             except Exception as exc:
                 logger.error("Aurigin.AI deepfake detection failed: %s", exc)
+                print(f"  ✗ Aurigin.AI deepfake detection failed: {exc}")
                 return 0.0
 
         # provider == "auto"
@@ -243,16 +249,19 @@ class DeepfakeDetector:
                     "falling back to the free local model.",
                     exc,
                 )
+                print(f"  🔁 Aurigin.AI failed ({exc}); falling back to local model")
                 try:
                     return await self._detect_local(audio_bytes)
                 except Exception as local_exc:
                     logger.error("Local deepfake fallback also failed: %s", local_exc)
+                    print(f"  ✗ Local deepfake fallback also failed: {local_exc}")
                     return 0.0
 
         try:
             return await self._detect_local(audio_bytes)
         except Exception as exc:
             logger.error("Local deepfake detection failed: %s", exc)
+            print(f"  ✗ Local deepfake detection failed: {exc}")
             return 0.0
 
     async def _detect_local(self, audio_bytes: bytes) -> float:

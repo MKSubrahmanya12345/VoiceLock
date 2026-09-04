@@ -154,7 +154,7 @@ async def synthesize_agent_audio(
                 "Fish Audio TTS failed (%s). Falling back to free Edge TTS voice...",
                 exc,
             )
-            print(f"[Agent TTS] Fish failed ({exc}); falling back to Edge")
+            print(f"[Agent TTS] Fish failed ({exc}); falling back to free Edge TTS voice...")
 
     audio_bytes = await _generate_with_edge(text)
     _write_cache(edge_cache, audio_bytes)
