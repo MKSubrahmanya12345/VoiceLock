@@ -2,11 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Save, Loader2, Play, Pause, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
 import { useAudioCapture } from "@/hooks/useAudioCapture";
 import { AIVoiceInput } from "@/components/ui/ai-voice-input";
-import { apiService } from "@/services/api";
+import { apiService, type EnrollmentInfo } from "@/services/api";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -16,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { InteractiveHoverButton } from "@/components/ui/interactive-hover-button";
+import { getSupabase } from "@/lib/supabase";
 
 const ENROLLMENT_PROMPTS = [
   "I am enrolling my voice to secure my account. My voice is my unique password that verifies my identity. By speaking this phrase, I authorize the system to create a secure voiceprint for future authentication. This process ensures that only I can access my sensitive information.",
@@ -27,7 +31,10 @@ const ENROLLMENT_PROMPTS = [
 
 export default function EnrollmentPage() {
   const router = useRouter();
-  const [userId, setUserId] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [existing, setExisting] = useState<EnrollmentInfo | null>(null);
+  const [checking, setChecking] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -36,11 +43,26 @@ export default function EnrollmentPage() {
   const { isRecording, audioUrl, audioBlob, startCapture, stopCapture, reset, analyser } = useAudioCapture();
 
   useEffect(() => {
-    // Generate a random user ID on mount
-    const randomId = 'user_' + Math.random().toString(36).substring(2, 9);
-    setUserId(randomId);
     // Select random prompt
     setPrompt(ENROLLMENT_PROMPTS[Math.floor(Math.random() * ENROLLMENT_PROMPTS.length)]);
+    // Load signed-in user + their current enrollment (voiceprint is per-user).
+    (async () => {
+      try {
+        const { data } = await getSupabase().auth.getSession();
+        const email = data.session?.user?.email ?? '';
+        setUserEmail(email);
+        setDisplayName((prev) => prev || email.split('@')[0] || '');
+        const info = await apiService.getMyEnrollment();
+        if (info.enrolled) {
+          setExisting(info);
+          if (info.name) setDisplayName(info.name);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setChecking(false);
+      }
+    })();
   }, []);
 
   const handleOpenChange = (open: boolean) => {
@@ -61,13 +83,19 @@ export default function EnrollmentPage() {
       setErrorMessage('Please record audio first');
       return;
     }
+    if (!displayName.trim()) {
+      setStatus('error');
+      setErrorMessage('Please enter a display name');
+      return;
+    }
 
     setIsSaving(true);
     setStatus('idle');
     setErrorMessage('');
 
     try {
-      await apiService.enrollUser(userId, audioBlob);
+      const result = await apiService.enrollUser(displayName.trim(), audioBlob);
+      setExisting(result);
       setStatus('success');
     } catch (error) {
       console.error(error);
@@ -81,12 +109,19 @@ export default function EnrollmentPage() {
     }
   };
 
+  const startReEnroll = () => {
+    setExisting(null);
+    setStatus('idle');
+    setErrorMessage('');
+    reset();
+  };
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-slate-900 to-slate-950 flex flex-col items-center justify-center py-12 px-4 text-white overflow-hidden font-sans">
-      
+
       {/* Main Content Area */}
       <div className="flex flex-col items-center justify-center w-full max-w-md space-y-10 animate-in fade-in duration-700">
-        
+
         {/* Avatar / Icon */}
         <div className="relative">
           <div className="absolute -inset-4 bg-purple-500/20 rounded-full blur-xl" />
@@ -102,8 +137,30 @@ export default function EnrollmentPage() {
           <p className="text-slate-400 text-lg font-light">
             Create your own Vocalprint
           </p>
+          {userEmail && (
+            <p className="text-slate-500 text-sm font-mono">{userEmail}</p>
+          )}
         </div>
 
+        {checking ? (
+          <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+        ) : existing ? (
+          <div className="flex flex-col items-center space-y-6 py-4 animate-in fade-in zoom-in duration-300 w-full">
+            <div className="h-20 w-20 bg-green-500/20 rounded-full flex items-center justify-center">
+              <CheckCircle2 className="h-10 w-10 text-green-500" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-semibold">You&apos;re enrolled{existing.name ? `, ${existing.name}` : ''}</h3>
+              <p className="text-slate-400">Your voiceprint is ready for verification.</p>
+            </div>
+            <Button onClick={() => router.push('/call')} className="w-full bg-white text-slate-900 hover:bg-slate-200">
+              Continue to call
+            </Button>
+            <button onClick={startReEnroll} className="text-sm text-slate-400 hover:text-white">
+              Re-enroll with a new recording
+            </button>
+          </div>
+        ) : (
         <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
           <DialogTrigger asChild>
             <InteractiveHoverButton text="Begin" />
@@ -125,21 +182,34 @@ export default function EnrollmentPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center space-y-8">
-                
+
                 <div className="text-center space-y-6 w-full">
                   <p className="text-slate-400 text-sm uppercase tracking-widest font-medium">
                     Record and read the following text
                   </p>
                   <div className="text-white/90 text-lg leading-relaxed font-light">
-                    "{prompt}"
+                    &quot;{prompt}&quot;
                   </div>
+                </div>
+
+                <div className="w-full space-y-2">
+                  <Label htmlFor="displayName" className="text-slate-300 text-sm">
+                    Display name for this voiceprint
+                  </Label>
+                  <Input
+                    id="displayName"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="e.g. Jane Doe"
+                    className="h-11 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+                  />
                 </div>
 
                 {/* Recording Interface */}
                 <div className="w-full flex flex-col items-center gap-6">
                     {!audioUrl ? (
                         <div className="scale-125 py-4">
-                            <AIVoiceInput 
+                            <AIVoiceInput
                                 isRecording={isRecording}
                                 analyser={analyser}
                                 onStart={startCapture}
@@ -151,16 +221,16 @@ export default function EnrollmentPage() {
                     ) : (
                         <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-4">
                             <CustomAudioPlayer src={audioUrl} />
-                            
+
                             <div className="grid grid-cols-2 gap-4">
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     className="h-12 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white bg-transparent"
                                     onClick={reset}
                                 >
                                     Retry
                                 </Button>
-                                <Button 
+                                <Button
                                     className="h-12 bg-green-600 hover:bg-green-500 text-white border-0"
                                     onClick={handleSave}
                                     disabled={isSaving}
@@ -171,11 +241,17 @@ export default function EnrollmentPage() {
                             </div>
                         </div>
                     )}
-                    
+
                     {status === 'error' && (
                       <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 px-4 py-2 rounded-lg animate-in fade-in slide-in-from-top-1">
-                        <AlertCircle className="h-4 w-4" />
-                        <span>{errorMessage || "Something went wrong. Please try again."}</span>
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>
+                          {errorMessage.includes('sign in') ? (
+                            <>{errorMessage} <Link href="/login" className="underline">Sign in</Link></>
+                          ) : (
+                            errorMessage || "Something went wrong. Please try again."
+                          )}
+                        </span>
                       </div>
                     )}
                 </div>
@@ -184,6 +260,7 @@ export default function EnrollmentPage() {
             )}
           </DialogContent>
         </Dialog>
+        )}
 
       </div>
     </div>
@@ -243,7 +320,7 @@ function CustomAudioPlayer({ src }: { src: string }) {
       >
         {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
       </Button>
-      
+
       <div className="flex-1 flex items-center gap-3">
         <span className="text-xs font-mono text-slate-400 w-10 text-right">
           {formatTime(currentTime)}

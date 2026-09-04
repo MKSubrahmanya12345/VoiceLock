@@ -30,8 +30,12 @@ export const useAgentAudio = (
   useEffect(() => {
     const fetchScript = async () => {
       try {
+        const { getAccessToken } = await import('@/lib/supabase');
+        const token = await getAccessToken();
         const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${baseUrl}/agent/script`);
+        const response = await fetch(`${baseUrl}/agent/script`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         const data = await response.json();
         setAgentScript(data.script);
         setWindows(data.windows);
@@ -123,8 +127,12 @@ export const useAgentAudio = (
 
   const playAgentAudio = async (segmentIndex: number, maxDuration?: number) => {
     try {
+      // <audio> elements can't send Authorization headers, so the JWT goes
+      // on the query string (same pattern as the audio WebSocket).
+      const { getAccessToken } = await import('@/lib/supabase');
+      const token = await getAccessToken();
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const audioUrl = `${baseUrl}/agent/audio/${segmentIndex}?format=mp3`;
+      const audioUrl = `${baseUrl}/agent/audio/${segmentIndex}?format=mp3${token ? `&token=${encodeURIComponent(token)}` : ''}`;
       
       // Stop any currently playing audio
       if (audioRef.current) {

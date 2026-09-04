@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     next_public_supabase_url: str = ""
     next_public_supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
+
+    # Local development only: skip JWT verification and identify callers via
+    # the X-User-Id header (default "demo_user"). NEVER enable in production.
+    dev_no_auth: bool = False
     
     # Fish Audio TTS
     fish_audio_api_key: str = ""

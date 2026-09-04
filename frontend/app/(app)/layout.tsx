@@ -1,4 +1,5 @@
 import { Header } from "@/components/Header";
+import { AuthGuard } from "@/components/AuthGuard";
 
 export default function AppLayout({
   children,
@@ -9,7 +10,7 @@ export default function AppLayout({
     <>
       <Header />
       <main className="flex-1 container max-w-screen-2xl mx-auto py-6 px-4">
-        {children}
+        <AuthGuard>{children}</AuthGuard>
       </main>
     </>
   );

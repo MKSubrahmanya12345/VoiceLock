@@ -299,7 +299,7 @@ Responsibilities:
 9. Future Extensions
 	•	Replace static windows with real diarization
 	•	Add Twilio / PSTN support
-	•	Multi user enrollment and login
+	•	Multi user enrollment and login (implemented: Supabase Auth + per-user voiceprints)
 	•	Persistent DB (Supabase/Postgres)
 	•	Full analytics dashboard
 

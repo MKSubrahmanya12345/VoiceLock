@@ -1,8 +1,9 @@
 """Agent TTS API endpoints"""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from ..services.tts_service import TTSService
 from ..services.agent_script import get_agent_segment, get_timing_windows, AGENT_SCRIPT
+from ..dependencies import get_user_id_from_token, verify_token
 from ..config import get_settings
 from typing import Optional
 
@@ -30,8 +31,8 @@ def get_tts_service() -> TTSService:
 
 
 @router.get("/script")
-async def get_script():
-    """Get the full agent script with timing"""
+async def get_script(user_id: str = Depends(verify_token)):
+    """Get the full agent script with timing (requires authentication)."""
     return {
         "script": AGENT_SCRIPT,
         "windows": get_timing_windows()
@@ -39,14 +40,20 @@ async def get_script():
 
 
 @router.get("/audio/{segment_index}")
-async def get_agent_audio(segment_index: int, format: str = "mp3"):
+async def get_agent_audio(segment_index: int, format: str = "mp3", token: str | None = None):
     """
     Generate and return agent audio for a specific script segment.
-    
+
+    Requires a valid Supabase access token. Browsers can't attach headers to
+    `<audio>` element requests, so the token arrives as a `?token=` query
+    param (same pattern as the audio WebSocket).
+
     Args:
         segment_index: Index of the script segment (0-based)
         format: Audio format (mp3, wav, opus, flac)
+        token: Supabase access token
     """
+    get_user_id_from_token(token)  # 401 on missing/invalid token
     print(f"[Agent TTS] Request for segment {segment_index}")
     
     # Get the segment

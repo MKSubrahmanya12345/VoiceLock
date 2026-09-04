@@ -1,9 +1,18 @@
-"""Test enrollment endpoint with real audio file"""
+"""Test enrollment endpoint with real audio file.
+
+Auth: the backend requires a Supabase JWT. Export VOICELOCK_TEST_TOKEN with a
+valid access token before running (the enrollment is keyed to that token's
+user). Or run the server with DEV_NO_AUTH=1 for local development only.
+"""
 import asyncio
 import httpx
+import os
 from pathlib import Path
 
 BASE_URL = "http://localhost:8000"
+
+TEST_TOKEN = os.environ.get("VOICELOCK_TEST_TOKEN", "")
+HEADERS = {"Authorization": f"Bearer {TEST_TOKEN}"} if TEST_TOKEN else {}
 
 
 async def test_enrollment():
@@ -29,21 +38,19 @@ async def test_enrollment():
         return
     
     print(f"\n✓ Found enrollment audio: {enrollment_audio}")
-    
-    # 2. Test enrollment endpoint
+
+    # 2. Test enrollment endpoint (identity comes from the Bearer token)
     print("\n1. Testing enrollment creation...")
     async with httpx.AsyncClient() as client:
         with open(enrollment_audio, 'rb') as f:
             files = {'audio': ('enrollment.wav', f, 'audio/wav')}
-            data = {
-                'user_id': 'test_user_api',
-                'name': 'Test User via API'
-            }
-            
+            data = {'name': 'Test User via API'}
+
             response = await client.post(
                 f"{BASE_URL}/enrollment/create",
                 files=files,
                 data=data,
+                headers=HEADERS,
                 timeout=30.0
             )
         
@@ -62,7 +69,7 @@ async def test_enrollment():
     # 3. Check enrollment
     print("\n2. Checking enrollment status...")
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{BASE_URL}/enrollment/check/test_user_api")
+        response = await client.get(f"{BASE_URL}/enrollment/me", headers=HEADERS)
         result = response.json()
         
         if result['enrolled']:
@@ -75,7 +82,7 @@ async def test_enrollment():
     # 4. List all enrollments
     print("\n3. Listing all enrollments...")
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{BASE_URL}/enrollment/list")
+        response = await client.get(f"{BASE_URL}/enrollment/list", headers=HEADERS)
         result = response.json()
         
         print(f"   ✓ Found {len(result['users'])} enrolled users:")
@@ -87,7 +94,7 @@ async def test_enrollment():
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{BASE_URL}/sessions",
-            json={"user_id": "test_user_api"}
+            headers=HEADERS
         )
         
         if response.status_code == 200:
@@ -102,10 +109,10 @@ async def test_enrollment():
     print("✓ All tests passed!")
     print("=" * 60)
     print("\nYour frontend can now:")
-    print("1. POST to /enrollment/create with audio file + user info")
-    print("2. GET /enrollment/list to show all users")
-    print("3. POST to /sessions with user_id to start verification")
-    print("4. WebSocket to /ws/audio to stream audio")
+    print("1. POST to /enrollment/create with audio file + name (Bearer token)")
+    print("2. GET /enrollment/me to check the caller's enrollment")
+    print("3. POST to /sessions to start verification (user from token)")
+    print("4. WebSocket to /ws/audio?session_id=...&token=... to stream audio")
     print("5. GET /sessions/{id}/risk to check verification status")
 
 

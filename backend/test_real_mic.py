@@ -12,6 +12,13 @@ from app.services.audio_utils import export_audio_to_wav
 BASE_URL = "http://localhost:8000"
 WS_URL = "ws://localhost:8000"
 
+import os
+# Auth: the backend requires a Supabase JWT on every endpoint.
+# Export VOICELOCK_TEST_TOKEN with a valid access token before running
+# (or run the server with DEV_NO_AUTH=1 for local development only).
+TEST_TOKEN = os.environ.get("VOICELOCK_TEST_TOKEN", "")
+HEADERS = {"Authorization": f"Bearer {TEST_TOKEN}"} if TEST_TOKEN else {}
+
 # Audio settings - MUST match backend
 SAMPLE_RATE = 16000
 CHANNELS = 1
@@ -29,8 +36,9 @@ async def test_with_real_mic():
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{BASE_URL}/sessions",
-            json={"user_id": "demo_user"}
+            headers=HEADERS
         )
+        response.raise_for_status()
         session_data = response.json()
         session_id = session_data["session_id"]
         print(f"   ✓ Session created: {session_id[:8]}...")
@@ -64,7 +72,7 @@ async def test_with_real_mic():
     print("   - 55-60s: Caller speaks (TALK NOW - recorded to buffer)")
     print("\n   Press Ctrl+C to stop early\n")
     
-    ws_uri = f"{WS_URL}/ws/audio?session_id={session_id}"
+    ws_uri = f"{WS_URL}/ws/audio?session_id={session_id}&token={TEST_TOKEN}"
     
     try:
         async with websockets.connect(ws_uri) as websocket:
@@ -124,7 +132,7 @@ async def test_with_real_mic():
     print(f"\n4. Checking session and exporting audio...")
     async with httpx.AsyncClient() as client:
         # Check risk status
-        response = await client.get(f"{BASE_URL}/sessions/{session_id}/risk")
+        response = await client.get(f"{BASE_URL}/sessions/{session_id}/risk", headers=HEADERS)
         risk_data = response.json()
         print(f"   Status: {risk_data['status']}")
         print(f"   Reason: {risk_data['status_reason']}")
@@ -132,7 +140,7 @@ async def test_with_real_mic():
         # Try to export audio
         try:
             print(f"\n5. Downloading caller audio...")
-            response = await client.get(f"{BASE_URL}/sessions/{session_id}/export-audio")
+            response = await client.get(f"{BASE_URL}/sessions/{session_id}/export-audio", headers=HEADERS)
             if response.status_code == 200:
                 # Save to file
                 output_file = f"test_recording_{session_id[:8]}.wav"
