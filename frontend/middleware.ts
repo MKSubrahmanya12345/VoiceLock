@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
-// Auth removed for the demo: no Supabase session check on any route.
+// Route protection lives in <AuthGuard /> (client-side Supabase session check).
+// Kept as a passthrough so static-asset matching stays in one place.
 export async function middleware(_request: NextRequest) {
   return NextResponse.next()
 }

@@ -6,6 +6,7 @@ from ..services.audio_processor import AudioProcessor
 from ..services.voice_embedding import get_voice_embedding
 from ..services.agent_script import get_current_window
 from ..services.social_engineering import SocialEngineeringDetector
+from ..dependencies import get_user_id_from_token
 from ..config import get_settings
 
 router = APIRouter(tags=["websocket"])
@@ -22,22 +23,39 @@ se_detector = SocialEngineeringDetector()
 
 
 @router.websocket("/ws/audio")
-async def audio_stream(websocket: WebSocket, session_id: str):
+async def audio_stream(websocket: WebSocket, session_id: str, token: str | None = None):
     """
     WebSocket endpoint for streaming caller audio.
-    
+
+    Query params:
+    - session_id: session created via POST /sessions (belongs to the caller)
+    - token: Supabase access token (browsers can't set WS headers, so it
+      travels as a query param). Must belong to the session owner.
+
     Client sends: Binary PCM 16-bit, 16kHz, mono
     """
     # Accept WebSocket connection
     await websocket.accept()
-    
+
+    # Authenticate: token must be valid and match the session owner, so one
+    # user can't stream audio into another user's verification session.
+    try:
+        ws_user_id = get_user_id_from_token(token)
+    except Exception:
+        await websocket.close(code=4401, reason="Missing or invalid auth token")
+        return
+
     # Get session manager
     session_manager = get_session_manager()
-    
+
     # Verify session exists
     session = session_manager.get_session(session_id)
     if not session:
         await websocket.close(code=4004, reason="Session not found")
+        return
+
+    if session.user_id != ws_user_id:
+        await websocket.close(code=4403, reason="Session belongs to a different user")
         return
     
     try:

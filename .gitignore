@@ -47,6 +47,15 @@ data/
 *.mp3
 *.npy
 
+# Downloaded ML model artifacts (fetched from HuggingFace Hub on first run;
+# never commit these - stale/corrupt copies break model loading)
+pretrained_models/
+*.ckpt
+
+# Frontend source lives under frontend/lib/ - the Python 'lib/' rule above
+# must not swallow it (it previously prevented lib/utils.ts from committing).
+!frontend/lib/
+
 # Logs
 *.log
 

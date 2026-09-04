@@ -8,6 +8,13 @@ import numpy as np
 BASE_URL = "http://localhost:8000"
 WS_URL = "ws://localhost:8000"
 
+import os
+# Auth: the backend requires a Supabase JWT on every endpoint.
+# Export VOICELOCK_TEST_TOKEN with a valid access token before running
+# (or run the server with DEV_NO_AUTH=1 for local development only).
+TEST_TOKEN = os.environ.get("VOICELOCK_TEST_TOKEN", "")
+HEADERS = {"Authorization": f"Bearer {TEST_TOKEN}"} if TEST_TOKEN else {}
+
 
 async def test_audio_streaming():
     print("=" * 60)
@@ -19,8 +26,9 @@ async def test_audio_streaming():
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{BASE_URL}/sessions",
-            json={"user_id": "demo_user"}
+            headers=HEADERS
         )
+        response.raise_for_status()
         session_data = response.json()
         session_id = session_data["session_id"]
         print(f"   ✓ Session created: {session_id[:8]}...")
@@ -28,7 +36,7 @@ async def test_audio_streaming():
     
     # Step 2: Connect WebSocket
     print(f"\n2. Connecting WebSocket...")
-    ws_uri = f"{WS_URL}/ws/audio?session_id={session_id}"
+    ws_uri = f"{WS_URL}/ws/audio?session_id={session_id}&token={TEST_TOKEN}"
     
     async with websockets.connect(ws_uri) as websocket:
         print(f"   ✓ WebSocket connected")
@@ -75,7 +83,7 @@ async def test_audio_streaming():
     # Step 4: Check final risk status
     print(f"\n4. Checking final risk status...")
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"{BASE_URL}/sessions/{session_id}/risk")
+        response = await client.get(f"{BASE_URL}/sessions/{session_id}/risk", headers=HEADERS)
         risk_data = response.json()
         print(f"   ✓ Match score: {risk_data['match_score']}")
         print(f"   ✓ Fake score: {risk_data['fake_score']}")

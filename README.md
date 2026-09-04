@@ -252,17 +252,20 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 - `GET /sessions/{session_id}/risk` - Get real-time risk assessment
 - `GET /sessions/{session_id}/status` - Check session status
 
+All endpoints require `Authorization: Bearer <Supabase access token>` unless noted. Identity always comes from the token - enrollments, sessions, and verification are keyed to the token's `sub` (Supabase user UUID), so every user gets their own voiceprint.
+
 #### **Voice Enrollment**
-- `POST /enrollment/enroll` - Upload enrollment audio
-- `GET /enrollment/list` - List enrolled users
-- `DELETE /enrollment/{user_id}` - Remove enrollment
+- `POST /enrollment/create` - Upload enrollment audio (`audio` file + `name` field)
+- `GET /enrollment/me` - Check the caller's own enrollment
+- `DELETE /enrollment/me` - Remove the caller's own enrollment
+- `GET /enrollment/list` - List enrolled users (authenticated, demo/debug)
 
 #### **Agent Scripts**
 - `GET /agent/script` - Get current agent script with timing
-- `GET /agent/audio/{segment_index}` - Generate TTS audio for segment
+- `GET /agent/audio/{segment_index}?token=<jwt>` - Generate TTS audio for a segment (token on the query string, since `<audio>` elements can't send headers)
 
 #### **WebSocket**
-- `WS /ws/audio?session_id={id}` - Stream caller audio (PCM 16-bit, 16kHz mono)
+- `WS /ws/audio?session_id={id}&token=<jwt>` - Stream caller audio (PCM 16-bit, 16kHz mono). The token must belong to the session owner (close codes 4401/4403 otherwise).
 
 For complete API documentation, visit `http://localhost:8000/docs` when running the backend.
 
@@ -277,12 +280,14 @@ For complete API documentation, visit `http://localhost:8000/docs` when running 
 cd backend
 python enroll_user.py --user-id john_doe --duration 10
 
-# Or via API
-curl -X POST "http://localhost:8000/enrollment/enroll" \
-  -H "Content-Type: multipart/form-data" \
+# Or via API (identity comes from the Supabase JWT, not the form fields)
+curl -X POST "http://localhost:8000/enrollment/create" \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
   -F "audio=@enrollment_audio.wav" \
-  -F "user_id=john_doe"
+  -F "name=Jane Doe"
 ```
+
+New here? Sign up at `http://localhost:3000/login`, then enroll at `/enrollment` - the voiceprint is stored under your Supabase user id and later calls verify against it.
 
 ### 2. Start a Secure Call
 

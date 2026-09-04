@@ -1,20 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Shield, Github, Menu, X } from "lucide-react"; 
+import { usePathname, useRouter } from "next/navigation";
+import { Shield, Github, Menu, X, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
+import { getSupabase } from "@/lib/supabase";
 
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Close mobile menu when route changes
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
+
+  // Track signed-in user for the header account area.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await getSupabase().auth.getSession();
+        if (mounted) setUserEmail(data.session?.user?.email ?? null);
+      } catch {
+        if (mounted) setUserEmail(null);
+      }
+    })();
+    let subscription: { unsubscribe: () => void } | null = null;
+    try {
+      const { data } = getSupabase().auth.onAuthStateChange((_event, session) => {
+        if (mounted) setUserEmail(session?.user?.email ?? null);
+      });
+      subscription = data.subscription;
+    } catch {
+      // Supabase not configured - header simply shows signed-out state.
+    }
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
+  }, [pathname]);
+
+  const handleSignOut = async () => {
+    try {
+      await getSupabase().auth.signOut();
+    } finally {
+      setUserEmail(null);
+      router.push("/login");
+    }
+  };
 
   const routes = [
     { href: "/", label: "Home", active: pathname === "/" },
@@ -94,7 +132,26 @@ export function Header() {
             
           {/* User / Login Actions (Visible on both mobile and desktop now) */}
           <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
-            <span className="text-xs font-medium text-emerald-400">Demo Mode</span>
+            {userEmail ? (
+              <>
+                <span className="text-xs font-medium text-slate-300 max-w-40 truncate hidden sm:inline">
+                  {userEmail}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="text-slate-400 hover:text-white hover:bg-slate-800 gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">Sign out</span>
+                </Button>
+              </>
+            ) : (
+              <Button asChild variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-slate-800">
+                <Link href="/login">Sign in</Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>

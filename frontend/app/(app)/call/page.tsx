@@ -8,7 +8,7 @@ import { Phone, PhoneOff, Mic, MicOff, Grid3x3, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function CallPage() {
-  const { sessionId, isRecording, startCall, endCall, sessionStartTime, setShouldSendAudio } = useCallSession();
+  const { sessionId, isRecording, startCall, endCall, sessionStartTime, setShouldSendAudio, error: callError } = useCallSession();
   const { isAgentSpeaking, currentText } = useAgentAudio(isRecording, sessionStartTime, setShouldSendAudio);
   
   const [duration, setDuration] = useState(0);
@@ -104,6 +104,13 @@ export default function CallPage() {
             </>
           )}
         </div>
+
+        {/* Call errors (auth failures, session creation issues) */}
+        {callError && (
+          <div className="w-full max-w-md flex items-center gap-2 text-red-300 text-sm bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-2xl">
+            <span>{callError}</span>
+          </div>
+        )}
 
         {/* Captions */}
         <div className="h-24 flex items-center justify-center w-full px-6">

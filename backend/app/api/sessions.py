@@ -37,20 +37,27 @@ async def create_session(user_id: str = Depends(verify_token)):
     )
 
 
+def _get_owned_session(session_id: str, user_id: str):
+    """Fetch a session and ensure it belongs to the authenticated caller."""
+    session_manager = get_session_manager()
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Session belongs to a different user")
+    return session
+
+
 @router.get("/{session_id}/risk", response_model=RiskResponse)
-async def get_risk(session_id: str):
+async def get_risk(session_id: str, user_id: str = Depends(verify_token)):
     """
     Get current risk assessment for session.
     
     Returns voice match score, synthetic likelihood, and overall risk status.
+    Only the user who created the session may read it.
     """
-    # Get session manager
-    session_manager = get_session_manager()
-    
-    # Get session
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    # Get session (must belong to the caller)
+    session = _get_owned_session(session_id, user_id)
     
     # Compute risk assessment
     mean_match, mean_fake, status, reason = risk_engine.compute_risk(
@@ -82,19 +89,15 @@ async def get_risk(session_id: str):
 
 
 @router.get("/{session_id}/status")
-async def get_session_status(session_id: str):
+async def get_session_status(session_id: str, user_id: str = Depends(verify_token)):
     """
     Get session status (active/inactive).
-    
+
     Returns whether the session is still active or has been closed.
+    Only the user who created the session may read it.
     """
-    # Get session manager
-    session_manager = get_session_manager()
-    
-    # Get session
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    # Get session (must belong to the caller)
+    session = _get_owned_session(session_id, user_id)
     
     return {
         "session_id": session_id,
@@ -106,24 +109,20 @@ async def get_session_status(session_id: str):
 
 
 @router.get("/{session_id}/export-audio")
-async def export_audio(session_id: str):
+async def export_audio(session_id: str, user_id: str = Depends(verify_token)):
     """
     Export caller audio buffer to WAV file for verification.
-    
+
     This is a debug endpoint to verify audio capture is working correctly.
+    Only the user who created the session may use it.
     """
     from fastapi.responses import FileResponse
     from ..services.audio_utils import export_audio_to_wav, get_audio_info
     import tempfile
     import os
-    
-    # Get session manager
-    session_manager = get_session_manager()
-    
-    # Get session
-    session = session_manager.get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get session (must belong to the caller)
+    session = _get_owned_session(session_id, user_id)
     
     # Check if there's audio to export
     if not session.caller_audio:
