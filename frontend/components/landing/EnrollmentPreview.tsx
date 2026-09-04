@@ -4,23 +4,14 @@ import { useState } from 'react';
 import { Mic, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 
 export default function EnrollmentPreview() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClient();
 
-  const handleStartEnrollment = async () => {
+  const handleStartEnrollment = () => {
     setIsLoading(true);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (session) {
-      router.push('/enrollment');
-    } else {
-      router.push('/login');
-    }
+    router.push('/enrollment');
   };
 
   return (

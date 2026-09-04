@@ -2,41 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, User, LogOut, Github, Menu, X } from "lucide-react"; 
+import { Shield, Github, Menu, X } from "lucide-react"; 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export function Header() {
   const pathname = usePathname();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const supabase = createClient();
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const email = user?.email;
-      if (email?.endsWith('@callshield.local')) {
-        setUserEmail(email.split('@')[0]);
-      } else {
-        setUserEmail(email || null);
-      }
-    };
-    getUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const email = session?.user?.email;
-      if (email?.endsWith('@callshield.local')) {
-        setUserEmail(email.split('@')[0]);
-      } else {
-        setUserEmail(email || null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -120,33 +93,9 @@ export function Header() {
           </Button>
             
           {/* User / Login Actions (Visible on both mobile and desktop now) */}
-          {userEmail ? (
-            <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
-              {/* Hide email text on very small screens so it doesn't crowd the logo */}
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800">
-                <User className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-xs font-medium text-slate-300">
-                  {userEmail}
-                </span>
-              </div>
-              
-              <Button 
-                variant="ghost" 
-                size="icon"
-                className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-red-400/10"
-                title="Sign Out"
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                }}
-              >
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </div>
-          ) : (
-            <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6">
-              <Link href="/login">Login</Link>
-            </Button>
-          )}
+          <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
+            <span className="text-xs font-medium text-emerald-400">Demo Mode</span>
+          </div>
         </div>
       </div>
 
@@ -183,13 +132,6 @@ export function Header() {
               GitHub Repo
             </Link>
             
-            {/* Show email in dropdown if hidden in top bar on small screens */}
-            {userEmail && (
-                 <div className="flex sm:hidden items-center gap-3 px-4 py-2 text-slate-300 bg-slate-900/50 rounded-lg">
-                 <User className="w-4 h-4 text-blue-400" />
-                 <span className="text-sm font-medium">{userEmail}</span>
-               </div>
-            )}
 
           </div>
         </div>

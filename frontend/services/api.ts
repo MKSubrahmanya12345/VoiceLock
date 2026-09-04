@@ -1,17 +1,10 @@
 import { SessionStatus, SessionResponse, RiskResponse } from '@/types';
-import { createClient } from '@/lib/supabase/client';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 async function getAuthHeaders() {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) {
-    throw new Error('User not authenticated');
-  }
-  return {
-    'Authorization': `Bearer ${session.access_token}`
-  };
+  // Auth removed for the demo: the backend no longer requires a token.
+  return {};
 }
 
 export const apiService = {
@@ -49,16 +42,12 @@ export const apiService = {
   },
 
   async enrollUser(name: string, audioBlob: Blob): Promise<any> {
-    const headers = await getAuthHeaders();
     const formData = new FormData();
     formData.append('name', name);
     formData.append('audio', audioBlob, 'enrollment.wav');
 
     const response = await fetch(`${API_BASE_URL}/enrollment/create`, {
       method: 'POST',
-      headers: {
-        'Authorization': headers['Authorization']
-      },
       body: formData,
     });
 

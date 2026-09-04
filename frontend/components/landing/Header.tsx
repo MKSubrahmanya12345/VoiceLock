@@ -2,31 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, User, LogOut, Github, Menu, X } from "lucide-react"; 
+import { Shield, Github, Menu, X } from "lucide-react"; 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export default function Header() {
   const pathname = usePathname();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const supabase = createClient();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) setUserEmail(user.email);
-    };
-    getUser();
   }, []);
 
   const routes = [
@@ -85,18 +74,9 @@ export default function Header() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-4">
-          {userEmail ? (
-            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-slate-800">
-              <span className="text-xs font-medium text-slate-400">{userEmail}</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-400">
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </div>
-          ) : (
-            <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 shadow-lg shadow-blue-900/20">
-              <Link href="/login">Log in</Link>
-            </Button>
-          )}
+          <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 shadow-lg shadow-blue-900/20">
+            <Link href="/enrollment">Get Started</Link>
+          </Button>
         </div>
       </div>
 

@@ -1,0 +1,440 @@
+diff --git a/backend/app/dependencies.py b/backend/app/dependencies.py
+index 08bae2a..c7ec20f 100644
+--- a/backend/app/dependencies.py
++++ b/backend/app/dependencies.py
+@@ -1,38 +1,12 @@
+-from fastapi import Header, HTTPException
+-import jwt
+-import os
+-from dotenv import load_dotenv
++"""Auth disabled for the demo.
+ 
+-load_dotenv()
++Protected endpoints used to verify the Supabase JWT here. For the demo, auth
++is removed entirely: every request is accepted as the "demo_user" identity,
++which is also where demo enrollments are stored and matched against.
++"""
++from fastapi import Header
+ 
+-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+ 
+-async def verify_token(authorization: str = Header(...)):
+-    if not SUPABASE_JWT_SECRET or SUPABASE_JWT_SECRET == "your_jwt_secret_here":
+-        # Fallback for development if secret is not set
+-        # For now, we might want to allow it to pass or fail. 
+-        # Let's fail to prompt the user to fix it.
+-        print("WARNING: SUPABASE_JWT_SECRET is not set.")
+-        
+-    try:
+-        if not authorization.startswith("Bearer "):
+-            raise HTTPException(status_code=401, detail="Invalid authentication header format")
+-            
+-        token = authorization.split(" ")[1]
+-        
+-        # If secret is missing, we can't verify signature securely.
+-        # For strict security, we should fail.
+-        if not SUPABASE_JWT_SECRET:
+-             raise HTTPException(status_code=500, detail="Server misconfiguration: Missing JWT Secret")
+-
+-        # Verify the token
+-        payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+-        # Prefer email for display purposes in this demo, fallback to UUID
+-        return payload.get('email', payload['sub'])
+-    except jwt.ExpiredSignatureError:
+-        raise HTTPException(status_code=401, detail="Token has expired")
+-    except jwt.InvalidTokenError:
+-        raise HTTPException(status_code=401, detail="Invalid authentication token")
+-    except Exception as e:
+-        print(f"Auth error: {e}")
+-        raise HTTPException(status_code=401, detail="Authentication failed")
++async def verify_token(authorization: str | None = Header(None)) -> str:
++    """No-op auth dependency - accept any request as 'demo_user'."""
++    return "demo_user"
+diff --git a/frontend/app/(app)/login/page.tsx b/frontend/app/(app)/login/page.tsx
+index 5fc3a24..54726ac 100644
+--- a/frontend/app/(app)/login/page.tsx
++++ b/frontend/app/(app)/login/page.tsx
+@@ -1,122 +1,6 @@
+-'use client'
+-
+-import { useState } from 'react'
+-import { useRouter } from 'next/navigation'
+-import { createClient } from '@/lib/supabase/client'
+-import { Button } from "@/components/ui/button"
+-import { Input } from "@/components/ui/input"
+-import { Label } from "@/components/ui/label"
+-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+-import { Loader2 } from "lucide-react"
++import { redirect } from "next/navigation";
+ 
++// Auth removed for the demo: /login now just sends you to enrollment.
+ export default function LoginPage() {
+-  const [username, setUsername] = useState('')
+-  const [password, setPassword] = useState('')
+-  const [loading, setLoading] = useState(false)
+-  const [error, setError] = useState<string | null>(null)
+-  const router = useRouter()
+-  const supabase = createClient()
+-
+-  const handleLogin = async (e: React.FormEvent) => {
+-    e.preventDefault()
+-    setLoading(true)
+-    setError(null)
+-
+-    try {
+-      const { error } = await supabase.auth.signInWithPassword({
+-        email: `${username}@gmail.com`,
+-        password,
+-      })
+-
+-      if (error) throw error
+-
+-      router.push('/')
+-      router.refresh()
+-    } catch (err) {
+-      setError((err as Error).message)
+-    } finally {
+-      setLoading(false)
+-    }
+-  }
+-
+-  const handleSignUp = async () => {
+-    setLoading(true)
+-    setError(null)
+-
+-    try {
+-      const { error } = await supabase.auth.signUp({
+-        email: `${username}@gmail.com`,
+-        password,
+-      })
+-
+-      if (error) throw error
+-
+-      // Redirect to enrollment page after successful sign up
+-      router.push('/enrollment')
+-    } catch (err) {
+-      setError((err as Error).message)
+-    } finally {
+-      setLoading(false)
+-    }
+-  }
+-
+-  return (
+-    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+-      <Card className="w-full max-w-md">
+-        <CardHeader className="space-y-1">
+-          <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
+-          <CardDescription>
+-            Enter your username to sign in to your account
+-          </CardDescription>
+-        </CardHeader>
+-        <CardContent>
+-          <form onSubmit={handleLogin} className="space-y-4">
+-            <div className="space-y-2">
+-              <Label htmlFor="username">Username</Label>
+-              <Input
+-                id="username"
+-                type="text"
+-                placeholder="jdoe"
+-                required
+-                value={username}
+-                onChange={(e) => setUsername(e.target.value)}
+-              />
+-            </div>
+-            <div className="space-y-2">
+-              <Label htmlFor="password">Password</Label>
+-              <Input
+-                id="password"
+-                type="password"
+-                required
+-                value={password}
+-                onChange={(e) => setPassword(e.target.value)}
+-              />
+-            </div>
+-            
+-            {error && (
+-              <div className="text-sm text-red-500 font-medium">
+-                {error}
+-              </div>
+-            )}
+-
+-            <div className="flex flex-col gap-2">
+-              <Button type="submit" className="w-full" disabled={loading}>
+-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+-                Sign In
+-              </Button>
+-              <Button 
+-                type="button" 
+-                variant="outline" 
+-                className="w-full" 
+-                onClick={handleSignUp}
+-                disabled={loading}
+-              >
+-                Sign Up
+-              </Button>
+-            </div>
+-          </form>
+-        </CardContent>
+-      </Card>
+-    </div>
+-  )
++  redirect("/enrollment");
+ }
+diff --git a/frontend/components/Header.tsx b/frontend/components/Header.tsx
+index 080bae4..f642197 100644
+--- a/frontend/components/Header.tsx
++++ b/frontend/components/Header.tsx
+@@ -2,41 +2,14 @@
+ 
+ import Link from "next/link";
+ import { usePathname } from "next/navigation";
+-import { Shield, User, LogOut, Github, Menu, X } from "lucide-react"; 
++import { Shield, Github, Menu, X } from "lucide-react"; 
+ import { cn } from "@/lib/utils";
+ import { Button } from "@/components/ui/button";
+ import { useEffect, useState } from "react";
+-import { createClient } from "@/lib/supabase/client";
+ 
+ export function Header() {
+   const pathname = usePathname();
+-  const [userEmail, setUserEmail] = useState<string | null>(null);
+   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+-  const supabase = createClient();
+-
+-  useEffect(() => {
+-    const getUser = async () => {
+-      const { data: { user } } = await supabase.auth.getUser();
+-      const email = user?.email;
+-      if (email?.endsWith('@callshield.local')) {
+-        setUserEmail(email.split('@')[0]);
+-      } else {
+-        setUserEmail(email || null);
+-      }
+-    };
+-    getUser();
+-
+-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+-      const email = session?.user?.email;
+-      if (email?.endsWith('@callshield.local')) {
+-        setUserEmail(email.split('@')[0]);
+-      } else {
+-        setUserEmail(email || null);
+-      }
+-    });
+-
+-    return () => subscription.unsubscribe();
+-  }, []);
+ 
+   // Close mobile menu when route changes
+   useEffect(() => {
+@@ -120,33 +93,9 @@ export function Header() {
+           </Button>
+             
+           {/* User / Login Actions (Visible on both mobile and desktop now) */}
+-          {userEmail ? (
+-            <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
+-              {/* Hide email text on very small screens so it doesn't crowd the logo */}
+-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800">
+-                <User className="w-3.5 h-3.5 text-blue-400" />
+-                <span className="text-xs font-medium text-slate-300">
+-                  {userEmail}
+-                </span>
+-              </div>
+-              
+-              <Button 
+-                variant="ghost" 
+-                size="icon"
+-                className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-red-400/10"
+-                title="Sign Out"
+-                onClick={async () => {
+-                  await supabase.auth.signOut();
+-                }}
+-              >
+-                <LogOut className="w-4 h-4" />
+-              </Button>
+-            </div>
+-          ) : (
+-            <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6">
+-              <Link href="/login">Login</Link>
+-            </Button>
+-          )}
++          <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
++            <span className="text-xs font-medium text-emerald-400">Demo Mode</span>
++          </div>
+         </div>
+       </div>
+ 
+@@ -183,13 +132,6 @@ export function Header() {
+               GitHub Repo
+             </Link>
+             
+-            {/* Show email in dropdown if hidden in top bar on small screens */}
+-            {userEmail && (
+-                 <div className="flex sm:hidden items-center gap-3 px-4 py-2 text-slate-300 bg-slate-900/50 rounded-lg">
+-                 <User className="w-4 h-4 text-blue-400" />
+-                 <span className="text-sm font-medium">{userEmail}</span>
+-               </div>
+-            )}
+ 
+           </div>
+         </div>
+diff --git a/frontend/components/landing/EnrollmentPreview.tsx b/frontend/components/landing/EnrollmentPreview.tsx
+index 732dea0..cd0e7b5 100644
+--- a/frontend/components/landing/EnrollmentPreview.tsx
++++ b/frontend/components/landing/EnrollmentPreview.tsx
+@@ -4,23 +4,14 @@ import { useState } from 'react';
+ import { Mic, Lock } from 'lucide-react';
+ import { cn } from '@/lib/utils';
+ import { useRouter } from 'next/navigation';
+-import { createClient } from '@/lib/supabase/client';
+ 
+ export default function EnrollmentPreview() {
+   const router = useRouter();
+   const [isLoading, setIsLoading] = useState(false);
+-  const supabase = createClient();
+ 
+-  const handleStartEnrollment = async () => {
++  const handleStartEnrollment = () => {
+     setIsLoading(true);
+-    
+-    const { data: { session } } = await supabase.auth.getSession();
+-
+-    if (session) {
+-      router.push('/enrollment');
+-    } else {
+-      router.push('/login');
+-    }
++    router.push('/enrollment');
+   };
+ 
+   return (
+diff --git a/frontend/components/landing/Header.tsx b/frontend/components/landing/Header.tsx
+index 55c0afe..4d59c35 100644
+--- a/frontend/components/landing/Header.tsx
++++ b/frontend/components/landing/Header.tsx
+@@ -2,18 +2,15 @@
+ 
+ import Link from "next/link";
+ import { usePathname } from "next/navigation";
+-import { Shield, User, LogOut, Github, Menu, X } from "lucide-react"; 
++import { Shield, Github, Menu, X } from "lucide-react"; 
+ import { cn } from "@/lib/utils";
+ import { Button } from "@/components/ui/button";
+ import { useEffect, useState } from "react";
+-import { createClient } from "@/lib/supabase/client";
+ 
+ export default function Header() {
+   const pathname = usePathname();
+-  const [userEmail, setUserEmail] = useState<string | null>(null);
+   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+   const [scrolled, setScrolled] = useState(false);
+-  const supabase = createClient();
+ 
+   useEffect(() => {
+     const handleScroll = () => setScrolled(window.scrollY > 20);
+@@ -21,14 +18,6 @@ export default function Header() {
+     return () => window.removeEventListener('scroll', handleScroll);
+   }, []);
+ 
+-  useEffect(() => {
+-    const getUser = async () => {
+-      const { data: { user } } = await supabase.auth.getUser();
+-      if (user?.email) setUserEmail(user.email);
+-    };
+-    getUser();
+-  }, []);
+-
+   const routes = [
+     { href: "/", label: "Home" },
+     { href: "/enrollment", label: "Enrollment" },
+@@ -85,18 +74,9 @@ export default function Header() {
+ 
+         {/* Right: Actions */}
+         <div className="flex items-center gap-4">
+-          {userEmail ? (
+-            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-slate-800">
+-              <span className="text-xs font-medium text-slate-400">{userEmail}</span>
+-              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-400">
+-                <LogOut className="w-4 h-4" />
+-              </Button>
+-            </div>
+-          ) : (
+-            <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 shadow-lg shadow-blue-900/20">
+-              <Link href="/login">Log in</Link>
+-            </Button>
+-          )}
++          <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 shadow-lg shadow-blue-900/20">
++            <Link href="/enrollment">Get Started</Link>
++          </Button>
+         </div>
+       </div>
+ 
+diff --git a/frontend/middleware.ts b/frontend/middleware.ts
+index ff2e079..c2d8274 100644
+--- a/frontend/middleware.ts
++++ b/frontend/middleware.ts
+@@ -1,19 +1,12 @@
+-import { type NextRequest } from 'next/server'
+-import { updateSession } from '@/lib/supabase/middleware'
++import { type NextRequest, NextResponse } from 'next/server'
+ 
+-export async function middleware(request: NextRequest) {
+-  return await updateSession(request)
++// Auth removed for the demo: no Supabase session check on any route.
++export async function middleware(_request: NextRequest) {
++  return NextResponse.next()
+ }
+ 
+ export const config = {
+   matcher: [
+-    /*
+-     * Match all request paths except for the ones starting with:
+-     * - _next/static (static files)
+-     * - _next/image (image optimization files)
+-     * - favicon.ico (favicon file)
+-     * Feel free to modify this pattern to include more paths.
+-     */
+     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+   ],
+ }
+diff --git a/frontend/services/api.ts b/frontend/services/api.ts
+index 7d972c0..0c3e555 100644
+--- a/frontend/services/api.ts
++++ b/frontend/services/api.ts
+@@ -1,17 +1,10 @@
+ import { SessionStatus, SessionResponse, RiskResponse } from '@/types';
+-import { createClient } from '@/lib/supabase/client';
+ 
+ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+ 
+ async function getAuthHeaders() {
+-  const supabase = createClient();
+-  const { data: { session } } = await supabase.auth.getSession();
+-  if (!session?.access_token) {
+-    throw new Error('User not authenticated');
+-  }
+-  return {
+-    'Authorization': `Bearer ${session.access_token}`
+-  };
++  // Auth removed for the demo: the backend no longer requires a token.
++  return {};
+ }
+ 
+ export const apiService = {
+@@ -49,16 +42,12 @@ export const apiService = {
+   },
+ 
+   async enrollUser(name: string, audioBlob: Blob): Promise<any> {
+-    const headers = await getAuthHeaders();
+     const formData = new FormData();
+     formData.append('name', name);
+     formData.append('audio', audioBlob, 'enrollment.wav');
+ 
+     const response = await fetch(`${API_BASE_URL}/enrollment/create`, {
+       method: 'POST',
+-      headers: {
+-        'Authorization': headers['Authorization']
+-      },
+       body: formData,
+     });
+ 
