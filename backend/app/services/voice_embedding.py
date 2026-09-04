@@ -95,10 +95,28 @@ class VoiceEmbedding:
 
         logger.info("Loading SpeechBrain model: %s...", self.model_name)
         try:
-            self.model = EncoderClassifier.from_hparams(
-                source=self.model_name,
-                savedir=str(self.model_dir)
-            )
+            kwargs = {
+                "source": self.model_name,
+                "savedir": str(self.model_dir),
+            }
+            # SpeechBrain's Pretrained.from_hparams accepts a local_strategy
+            # since ~1.0.0. Use LocalStrategy.COPY so the cached model files
+            # are plain copies rather than symlinks. Windows blocks creating
+            # symlinks without admin / Developer Mode (WinError 1314), which
+            # previously broke first launch on the user's machine.
+            try:
+                import inspect
+
+                from speechbrain.utils.fetching import LocalStrategy
+
+                if "local_strategy" in inspect.signature(EncoderClassifier.from_hparams).parameters:
+                    kwargs["local_strategy"] = LocalStrategy.COPY
+            except Exception:
+                # Very old SpeechBrain or missing symbol: keep the default
+                # behaviour rather than crash the whole model fetch.
+                logger.debug("LocalStrategy.COPY not available for EncoderClassifier.from_hparams")
+
+            self.model = EncoderClassifier.from_hparams(**kwargs)
         except Exception as e:
             raise RuntimeError(
                 f"Could not load voice model '{self.model_name}'. "

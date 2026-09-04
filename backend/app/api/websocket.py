@@ -17,7 +17,9 @@ voice_embedding = get_voice_embedding()
 settings = get_settings()
 deepfake_detector = DeepfakeDetector(
     api_url=settings.aurigin_api_url,
-    api_key=settings.aurigin_api_key
+    api_key=settings.aurigin_api_key,
+    provider=settings.deepfake_provider,
+    local_model=settings.deepfake_model,
 )
 se_detector = SocialEngineeringDetector()
 

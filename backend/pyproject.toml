@@ -22,6 +22,8 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pyaudio>=0.2.13",
     "fish-audio-sdk>=1.0.0",
+    "edge-tts>=6.1.0",
+    "transformers>=4.38.2,<4.39",
     "PyJWT>=2.8.0",
     "openai>=2.8.1",
     "google-generativeai>=0.3.0",
@@ -56,3 +58,6 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

@@ -36,14 +36,13 @@ export const useCallSession = () => {
       localStorage.setItem('active_session_id', session.session_id);
 
       // 2. Connect WebSocket (browsers can't set WS headers, so the JWT
-      // travels as a ?token= query param the backend verifies)
-      const token = await getAccessToken();
-      if (!token) {
-        throw new Error('Your session expired. Please sign in again.');
-      }
+      // travels as a ?token= query param the backend verifies). The token is
+      // optional: the backend decides (e.g. DEV_NO_AUTH=1 accepts keyless
+      // connections), so we don't fail client-side when none is present.
+      const token = await getAccessToken().catch(() => null);
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const wsBaseUrl = baseUrl.replace(/^http/, 'ws');
-      const wsUrl = `${wsBaseUrl}/ws/audio?session_id=${session.session_id}&token=${encodeURIComponent(token)}`;
+      const wsUrl = `${wsBaseUrl}/ws/audio?session_id=${session.session_id}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -55,8 +54,10 @@ export const useCallSession = () => {
 
       ws.onclose = (event) => {
         setIsConnected(false);
-        if (event.code === 4401 || event.code === 4403) {
-          setError('Call authentication failed. Please sign in again and retry.');
+        if (event.code === 4401) {
+          setError('Call authentication failed: missing or invalid session. Please sign in again and retry.');
+        } else if (event.code === 4403) {
+          setError('Call authentication failed: this session belongs to a different user.');
         }
       };
 
