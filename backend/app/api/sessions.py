@@ -1,0 +1,153 @@
+"""Session API endpoints"""
+from fastapi import APIRouter, HTTPException, Depends
+from ..models.schemas import SessionCreate, SessionResponse, RiskResponse, RiskStatus
+from ..services import get_session_manager
+from ..services.risk_engine import RiskEngine
+from ..dependencies import verify_token
+
+router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+# Initialize risk engine
+risk_engine = RiskEngine()
+
+
+@router.post("", response_model=SessionResponse)
+async def create_session(user_id: str = Depends(verify_token)):
+    """
+    Create a new call session.
+    
+    Returns session_id and initial agent prompt.
+    """
+    # Get session manager
+    session_manager = get_session_manager()
+    
+    # Create new session
+    session = session_manager.create_session(user_id=user_id)
+    
+    # Generate agent greeting
+    agent_prompt = (
+        "Hello, this is SecureBank customer support. "
+        "How can I help you today?"
+    )
+    
+    return SessionResponse(
+        session_id=session.session_id,
+        user_id=user_id,
+        agent_prompt=agent_prompt,
+    )
+
+
+@router.get("/{session_id}/risk", response_model=RiskResponse)
+async def get_risk(session_id: str):
+    """
+    Get current risk assessment for session.
+    
+    Returns voice match score, synthetic likelihood, and overall risk status.
+    """
+    # Get session manager
+    session_manager = get_session_manager()
+    
+    # Get session
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Compute risk assessment
+    mean_match, mean_fake, status, reason = risk_engine.compute_risk(
+        match_scores=session.match_scores,
+        fake_scores=session.fake_scores,
+    )
+    
+    # Convert to 0-100 scale for UI
+    match_score = risk_engine.normalize_to_100(mean_match)
+    fake_score = risk_engine.normalize_to_100(mean_fake)
+    
+    # Get latest SE result
+    se_result = session.se_results[-1] if session.se_results else None
+    se_risk_score = se_result["risk_score"] if se_result else 0
+    se_risk_level = se_result["risk_level"] if se_result else "SAFE"
+    se_flagged_phrases = se_result["flagged_phrases"] if se_result else []
+    se_reason = se_result["reason"] if se_result else ""
+    
+    return RiskResponse(
+        match_score=match_score,
+        fake_score=fake_score,
+        status=status,
+        status_reason=reason,
+        se_risk_score=se_risk_score,
+        se_risk_level=se_risk_level,
+        se_flagged_phrases=se_flagged_phrases,
+        se_reason=se_reason
+    )
+
+
+@router.get("/{session_id}/status")
+async def get_session_status(session_id: str):
+    """
+    Get session status (active/inactive).
+    
+    Returns whether the session is still active or has been closed.
+    """
+    # Get session manager
+    session_manager = get_session_manager()
+    
+    # Get session
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {
+        "session_id": session_id,
+        "user_id": session.user_id,
+        "active": session.active,
+        "start_time": session.start_time,
+        "elapsed_time": session.elapsed_time
+    }
+
+
+@router.get("/{session_id}/export-audio")
+async def export_audio(session_id: str):
+    """
+    Export caller audio buffer to WAV file for verification.
+    
+    This is a debug endpoint to verify audio capture is working correctly.
+    """
+    from fastapi.responses import FileResponse
+    from ..services.audio_utils import export_audio_to_wav, get_audio_info
+    import tempfile
+    import os
+    
+    # Get session manager
+    session_manager = get_session_manager()
+    
+    # Get session
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Check if there's audio to export
+    if not session.caller_audio:
+        raise HTTPException(status_code=400, detail="No caller audio captured yet")
+    
+    # Get audio info
+    info = get_audio_info(session.caller_audio)
+    print(f"Exporting audio: {info}")
+    
+    # Create temporary WAV file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+    temp_path = temp_file.name
+    temp_file.close()
+    
+    # Export to WAV
+    export_audio_to_wav(session.caller_audio, temp_path)
+    
+    # Return file
+    return FileResponse(
+        temp_path,
+        media_type="audio/wav",
+        filename=f"caller_audio_{session_id[:8]}.wav",
+        headers={
+            "X-Audio-Duration": str(info["duration_seconds"]),
+            "X-Audio-Chunks": str(info["num_chunks"]),
+        }
+    )
