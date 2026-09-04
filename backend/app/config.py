@@ -32,7 +32,13 @@ class Settings(BaseSettings):
     fake_threshold: float = 0.2  # Probability threshold for SAFE
     aurigin_api_url: str = "https://aurigin.ai/api-ext"
     aurigin_api_key: str = ""
-    
+
+    # Deepfake detection provider: auto | aurigin | local | off
+    # auto = Aurigin when a key is set, otherwise local HF model.
+    # local = free HuggingFace model even when an Aurigin key is set.
+    deepfake_provider: str = "auto"
+    deepfake_model: str = "Bisher/wav2vec2_ASV_deepfake_audio_detection"
+
     # Deepfake detection - Undetectable.AI (backup)
     undetectable_api_url: str = ""
     undetectable_api_key: str = ""
@@ -51,6 +57,12 @@ class Settings(BaseSettings):
     fish_audio_api_key: str = ""
     fish_audio_model: str = "fish-speech-1.5"
     fish_audio_reference_id: str = ""  # Optional: for voice cloning
+
+    # Agent TTS provider: auto | fish | edge
+    # auto = Fish when a key is set, otherwise free Edge TTS; any Fish
+    # failure in auto mode falls back to Edge.
+    tts_provider: str = "auto"
+    edge_tts_voice: str = "en-US-AriaNeural"
 
     # OpenAI (for Whisper transcription)
     openai_api_key: str = ""

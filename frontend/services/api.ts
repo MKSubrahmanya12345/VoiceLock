@@ -16,6 +16,20 @@ function detailOf(body: unknown, fallback: string): string {
   return fallback;
 }
 
+/** Build a self-diagnosing error message for 401 responses. */
+async function errorMessageFor(response: Response, fallback: string): Promise<string> {
+  const body = await response.json().catch(() => null);
+  const detail = detailOf(body, fallback);
+  if (response.status === 401) {
+    const token = await getAccessToken().catch(() => null);
+    if (token) {
+      return `Your session expired. Please sign in again. (${detail})`;
+    }
+    return `You are not signed in, or Supabase is not configured. Please sign in first. (${detail})`;
+  }
+  return detail;
+}
+
 export interface EnrollmentInfo {
   enrolled: boolean;
   user_id: string;
@@ -36,8 +50,7 @@ export const apiService = {
     });
 
     if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      throw new Error(detailOf(body, 'Failed to create session'));
+      throw new Error(await errorMessageFor(response, 'Failed to create session'));
     }
 
     return response.json();
@@ -50,7 +63,7 @@ export const apiService = {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to get risk assessment');
+      throw new Error(await errorMessageFor(response, 'Failed to get risk assessment'));
     }
 
     return response.json();
@@ -69,8 +82,7 @@ export const apiService = {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => null);
-      throw new Error(detailOf(error, 'Enrollment failed'));
+      throw new Error(await errorMessageFor(response, 'Enrollment failed'));
     }
 
     return response.json();
@@ -105,8 +117,7 @@ export const apiService = {
     });
 
     if (!response.ok && response.status !== 404) {
-      const error = await response.json().catch(() => null);
-      throw new Error(detailOf(error, 'Failed to delete enrollment'));
+      throw new Error(await errorMessageFor(response, 'Failed to delete enrollment'));
     }
   },
 };

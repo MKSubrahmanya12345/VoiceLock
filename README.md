@@ -19,7 +19,7 @@ CallShield is a comprehensive security platform that combines passive voice biom
 - Cosine similarity scoring with configurable thresholds
 
 ### 🤖 **AI Deepfake Detection**
-- Integration with Aurigin.AI for synthetic voice detection
+- Integration with Aurigin.AI for synthetic voice detection, with a free local HuggingFace model fallback
 - Continuous analysis of audio streams for AI-generated speech
 - Probabilistic scoring with adjustable sensitivity
 
@@ -35,7 +35,7 @@ CallShield is a comprehensive security platform that combines passive voice biom
 
 ### 🎭 **Configurable Agent Scripts**
 - Pluggable conversation scenarios (banking, tech support, etc.)
-- Dynamic TTS voice generation using Fish Audio
+- Dynamic TTS voice generation using Fish Audio, with a free Edge TTS fallback when credit runs out
 - Script-based timing and conversation flow
 
 ---
@@ -211,10 +211,22 @@ AURIGIN_API_URL=https://aurigin.ai/api-ext
 AURIGIN_API_KEY=your_aurigin_key_here
 FAKE_THRESHOLD=0.2
 
+# Deepfake Detection provider: auto | aurigin | local | off
+# auto = Aurigin when a key is set, otherwise a free local HF model.
+# local = free local model even when an Aurigin key is set.
+DEEPFAKE_PROVIDER=auto
+DEEPFAKE_MODEL=Bisher/wav2vec2_ASV_deepfake_audio_detection
+
 # Text-to-Speech (Fish Audio)
 FISH_AUDIO_API_KEY=your_fish_audio_key_here
 FISH_AUDIO_MODEL=fish-speech-1.5
 FISH_AUDIO_REFERENCE_ID=your_voice_reference_id
+
+# Agent TTS provider: auto | fish | edge
+# auto = Fish when a key is set, otherwise free Edge TTS; any Fish
+# failure (e.g. HTTP 402 out of credit) falls back to Edge automatically.
+TTS_PROVIDER=auto
+EDGE_TTS_VOICE=en-US-AriaNeural
 
 # AI Analysis (Google Gemini)
 GEMINI_API_KEY=your_gemini_key_here
