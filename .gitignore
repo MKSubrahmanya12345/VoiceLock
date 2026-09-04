@@ -47,6 +47,11 @@ data/
 *.mp3
 *.npy
 
+# Downloaded ML model artifacts (fetched from HuggingFace Hub on first run;
+# never commit these - stale/corrupt copies break model loading)
+pretrained_models/
+*.ckpt
+
 # Logs
 *.log
 

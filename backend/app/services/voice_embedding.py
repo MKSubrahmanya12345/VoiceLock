@@ -1,8 +1,54 @@
 """Voice Embedding - SpeechBrain ECAPA-TDNN for speaker verification"""
+import logging
 import torch
 import numpy as np
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+MODEL_SOURCE = "speechbrain/spkrec-ecapa-voxceleb"
+
+# Anchor the model cache to the backend directory so it no longer depends on
+# the process working directory (uvicorn may be started from the repo root
+# or from backend/, which previously resolved to different locations).
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_MODEL_DIR = _BACKEND_DIR / "pretrained_models" / "spkrec-ecapa-voxceleb"
+
+
+def is_valid_hparams_file(path: Path) -> bool:
+    """Check that a cached hyperparams.yaml is a real hyperparams mapping.
+
+    A corrupt cache entry (e.g. a file containing a local filesystem path
+    instead of YAML) parses to a plain string. SpeechBrain's ``fetch`` reuses
+    any file already present in ``savedir`` as-is, so such a file makes model
+    loading crash with ``AttributeError: 'str' object has no attribute
+    'keys'`` deep inside hyperpyyaml. Detect that here so the bad file can
+    be discarded and re-downloaded from the HuggingFace Hub.
+
+    Returns True when the file is missing (nothing cached yet -> download)
+    or when it parses as a mapping containing the expected ``modules`` key.
+    """
+    if not path.exists():
+        return True
+    try:
+        try:
+            import yaml  # pyyaml, present via the speechbrain/hyperpyyaml stack
+        except ImportError:
+            yaml = None
+        if yaml is not None:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            # SpeechBrain requires "modules" and "pretrainer" keys; a poisoned
+            # file parses to a plain string and fails the isinstance check.
+            return isinstance(data, dict) and ("modules" in data or "pretrainer" in data)
+        # Fallback heuristic without pyyaml: the real file is kilobytes of
+        # YAML defining those mappings; poisoned files are short single-line
+        # scalars that never mention them.
+        content = path.read_bytes()
+        return b"modules:" in content or b"pretrainer:" in content
+    except Exception:
+        return False
 
 
 class VoiceEmbedding:
@@ -10,31 +56,56 @@ class VoiceEmbedding:
     
     def __init__(
         self,
-        model_name: str = "speechbrain/spkrec-ecapa-voxceleb",
+        model_name: str = MODEL_SOURCE,
         embeddings_dir: str = "../data/embeddings",
+        model_dir: Optional[str] = None,
     ):
         self.model_name = model_name
         self.embeddings_dir = Path(embeddings_dir)
         self.embeddings_dir.mkdir(parents=True, exist_ok=True)
+        # Absolute model cache dir (see DEFAULT_MODEL_DIR); may be overridden
+        # for tests via model_dir.
+        self.model_dir = Path(model_dir) if model_dir else DEFAULT_MODEL_DIR
         self.model = None  # Lazy loaded
     
     def _load_model(self):
         """Lazy load the SpeechBrain model with torchaudio compatibility patch"""
-        if self.model is None:
-            # Patch torchaudio compatibility issue before importing speechbrain
-            import torchaudio
-            if not hasattr(torchaudio, 'list_audio_backends'):
-                # Monkey patch for newer torchaudio versions
-                torchaudio.list_audio_backends = lambda: ["sox", "soundfile"]
-            
-            from speechbrain.inference.speaker import EncoderClassifier
-            
-            print(f"Loading SpeechBrain model: {self.model_name}...")
+        if self.model is not None:
+            return
+        # Patch torchaudio compatibility issue before importing speechbrain
+        import torchaudio
+        if not hasattr(torchaudio, 'list_audio_backends'):
+            # Monkey patch for newer torchaudio versions
+            torchaudio.list_audio_backends = lambda: ["sox", "soundfile"]
+
+        self.model_dir.mkdir(parents=True, exist_ok=True)
+
+        # Drop a poisoned hyperparams.yaml (see is_valid_hparams_file) so
+        # SpeechBrain downloads a fresh copy instead of crashing on it.
+        hparams_file = self.model_dir / "hyperparams.yaml"
+        if hparams_file.exists() and not is_valid_hparams_file(hparams_file):
+            logger.warning(
+                "Removing invalid cached model file %s; it will be "
+                "re-downloaded from the HuggingFace Hub.",
+                hparams_file,
+            )
+            hparams_file.unlink()
+
+        from speechbrain.inference.speaker import EncoderClassifier
+
+        logger.info("Loading SpeechBrain model: %s...", self.model_name)
+        try:
             self.model = EncoderClassifier.from_hparams(
                 source=self.model_name,
-                savedir="pretrained_models/spkrec-ecapa-voxceleb"
+                savedir=str(self.model_dir)
             )
-            print("✓ Model loaded successfully")
+        except Exception as e:
+            raise RuntimeError(
+                f"Could not load voice model '{self.model_name}'. "
+                "Check network access to huggingface.co, then delete "
+                f"'{self.model_dir}' and retry. Original error: {e}"
+            ) from e
+        logger.info("Model loaded successfully")
     
     def compute_embedding(self, audio_tensor: torch.Tensor) -> np.ndarray:
         """

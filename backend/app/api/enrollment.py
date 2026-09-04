@@ -1,10 +1,13 @@
 """Enrollment endpoints for voice registration"""
+import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 import numpy as np
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from ..services.voice_embedding import get_voice_embedding
 from ..services.audio_processor import AudioProcessor
@@ -49,7 +52,7 @@ async def create_enrollment(
     """
     try:
         # Validate audio file
-        if not audio.filename.endswith(('.wav', '.mp3', '.m4a')):
+        if not audio.filename or not audio.filename.endswith(('.wav', '.mp3', '.m4a')):
             raise HTTPException(
                 status_code=400,
                 detail="Audio file must be WAV, MP3, or M4A format"
@@ -112,7 +115,12 @@ async def create_enrollment(
             embedding_dimension=len(embedding)
         )
         
+    except HTTPException:
+        # Validation errors raised above (400s) pass through unchanged.
+        raise
     except Exception as e:
+        # Log the full traceback server-side; the client only gets a summary.
+        logger.exception("Enrollment failed for user_id=%s", user_id)
         raise HTTPException(
             status_code=500,
             detail=f"Enrollment failed: {str(e)}"
