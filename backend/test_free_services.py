@@ -110,12 +110,14 @@ class TestEdgeTTSService:
         assert EdgeTTSService._map_speed(0.8) == "-20%"
         assert EdgeTTSService._map_speed(2.0) == "+100%"
 
+    @pytest.mark.asyncio
     async def test_generate_speech_returns_mp3_bytes(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "edge_tts", _fake_edge_module())
         service = EdgeTTSService(voice="en-US-AriaNeural")
         audio = await service.generate_speech("Hello there", format="mp3", speed=1.0)
         assert audio == b"FAKE_EDGE_MP3"
 
+    @pytest.mark.asyncio
     async def test_generate_speech_missing_dep_is_clear(self, monkeypatch):
         monkeypatch.delitem(sys.modules, "edge_tts", raising=False)
         monkeypatch.setattr("builtins.__import__", _raise_missing_edge_tts)
@@ -143,6 +145,8 @@ def scratch_settings(tmp_path, monkeypatch):
 
 
 class TestAgentTTSChain:
+    pytestmark = pytest.mark.asyncio
+
     async def test_auto_healthy_fish_uses_fish(self, scratch_settings, monkeypatch):
         monkeypatch.setattr(scratch_settings, "fish_audio_api_key", "key")
         fish = AsyncMock(return_value=b"FISH_AUDIO")
@@ -260,10 +264,12 @@ class TestPickFakeIndex:
 # Deepfake provider routing
 # ---------------------------------------------------------------------------
 class TestDeepfakeRouting:
+    @pytest.mark.asyncio
     async def test_off_returns_zero(self):
         detector = DeepfakeDetector(api_url="", api_key="", provider="off", local_model=DEFAULT_LOCAL_MODEL)
         assert await detector.detect(b"anything") == 0.0
 
+    @pytest.mark.asyncio
     async def test_auto_with_key_prefers_aurigin(self):
         detector = DeepfakeDetector(api_url="https://example.invalid", api_key="key", provider="auto")
         detector._detect_aurigin = AsyncMock(return_value=0.9)
@@ -271,6 +277,7 @@ class TestDeepfakeRouting:
         assert await detector.detect(b"wav") == 0.9
         detector._local.score_wav.assert_not_awaited()
 
+    @pytest.mark.asyncio
     async def test_auto_aurigin_error_falls_back_to_local(self):
         detector = DeepfakeDetector(api_url="https://example.invalid", api_key="key", provider="auto")
         detector._detect_aurigin = AsyncMock(side_effect=RuntimeError("404"))
@@ -278,6 +285,7 @@ class TestDeepfakeRouting:
         assert await detector.detect(b"wav") == 0.5
         detector._local.score_wav.assert_awaited_once()
 
+    @pytest.mark.asyncio
     async def test_aurigin_provider_does_not_fallback(self):
         detector = DeepfakeDetector(api_url="https://example.invalid", api_key="key", provider="aurigin")
         detector._detect_aurigin = AsyncMock(side_effect=RuntimeError("404"))
@@ -285,6 +293,7 @@ class TestDeepfakeRouting:
         assert await detector.detect(b"wav") == 0.0
         detector._local.score_wav.assert_not_awaited()
 
+    @pytest.mark.asyncio
     async def test_local_provider_ignores_key(self):
         detector = DeepfakeDetector(api_url="https://example.invalid", api_key="key", provider="local")
         detector._detect_aurigin = AsyncMock(return_value=0.9)
@@ -292,6 +301,7 @@ class TestDeepfakeRouting:
         assert await detector.detect(b"wav") == 0.6
         detector._detect_aurigin.assert_not_awaited()
 
+    @pytest.mark.asyncio
     async def test_auto_without_key_uses_local(self):
         detector = DeepfakeDetector(api_url="https://example.invalid", api_key="", provider="auto")
         detector._detect_aurigin = AsyncMock(return_value=0.9)
@@ -306,6 +316,7 @@ class TestDeepfakeRouting:
         assert isinstance(pcm, bytes)
         assert len(pcm) > 0
 
+    @pytest.mark.asyncio
     async def test_score_wav_runs_in_worker(self, monkeypatch):
         detector = LocalDeepfakeDetector()
         monkeypatch.setattr(detector, "_score_wav_sync", lambda *a, **k: 0.77)
